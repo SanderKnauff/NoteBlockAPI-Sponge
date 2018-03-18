@@ -1,18 +1,27 @@
 package com.xxmicloxx.NoteBlockAPI;
 
-import org.bukkit.Bukkit;
-import org.bukkit.entity.Player;
+import org.spongepowered.api.Sponge;
+import org.spongepowered.api.effect.sound.SoundCategories;
+import org.spongepowered.api.effect.sound.SoundCategory;
+import org.spongepowered.api.entity.living.player.Player;
+import org.spongepowered.api.event.cause.Cause;
+import org.spongepowered.api.event.cause.EventContext;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public abstract class SongPlayer {
+
+    private final Lock lock = new ReentrantLock();
 
     protected Song song;
     protected boolean playing = false;
     protected short tick = -1;
-    protected ArrayList<String> playerList = new ArrayList<String>();
+    protected List<UUID> playerList = new ArrayList<>();
     protected boolean loop;
     protected boolean autoDestroy = false;
     protected boolean destroyed = false;
@@ -23,9 +32,15 @@ public abstract class SongPlayer {
     protected int fadeDuration = 60;
     protected int fadeDone = 0;
     protected FadeType fadeType = FadeType.FADE_LINEAR;
+    protected SoundCategory soundCategory;
 
     public SongPlayer(Song song) {
+        this(song, SoundCategories.BLOCK);
+    }
+
+    public SongPlayer(Song song, SoundCategory soundCategory) {
         this.song = song;
+        this.soundCategory = soundCategory;
         createThread();
     }
 
@@ -89,26 +104,23 @@ public abstract class SongPlayer {
                             calculateFade();
                             tick++;
                             if (tick > song.getLength()) {
-                                if(loop){
+                                if (loop) {
                                     tick = 0;
                                     continue;
                                 }
                                 playing = false;
                                 tick = -1;
-                                SongEndEvent event = new SongEndEvent(SongPlayer.this);
-                                Bukkit.getPluginManager().callEvent(event);
+                                SongEndEvent event = new SongEndEvent(SongPlayer.this, Cause.builder().append(this).build(EventContext.empty()));
+                                Sponge.getEventManager().post(event);
                                 if (autoDestroy) {
                                     destroy();
                                     return;
                                 }
                             }
-                            for (String s : playerList) {
-                                Player p = Bukkit.getPlayerExact(s);
-                                if (p == null) {
-                                    // offline...
-                                    continue;
-                                }
-                                playTick(p, tick);
+                            for (UUID uuid : playerList) {
+                                Sponge.getServer().getPlayer(uuid).ifPresent(player -> {
+                                    playTick(player, tick);
+                                });
                             }
                         }
                     }
@@ -128,28 +140,29 @@ public abstract class SongPlayer {
         playerThread.start();
     }
 
-    public List<String> getPlayerList() {
+    public List<UUID> getPlayerList() {
         return Collections.unmodifiableList(playerList);
     }
 
     public void addPlayer(Player p) {
         synchronized (this) {
             if (!playerList.contains(p.getName())) {
-                playerList.add(p.getName());
+                playerList.add(p.getUniqueId());
                 ArrayList<SongPlayer> songs = NoteBlockPlayerMain.plugin.playingSongs
                         .get(p.getName());
                 if (songs == null) {
                     songs = new ArrayList<SongPlayer>();
                 }
                 songs.add(this);
-                NoteBlockPlayerMain.plugin.playingSongs.put(p.getName(), songs);
+                NoteBlockPlayerMain.plugin.playingSongs.put(p.getUniqueId(), songs);
             }
         }
     }
+
     public void setLoop(boolean loop) {
         lock.lock();
         try {
-        this.loop = loop;
+            this.loop = loop;
         } finally {
             lock.unlock();
         }
@@ -163,6 +176,7 @@ public abstract class SongPlayer {
             lock.unlock();
         }
     }
+
     public boolean getAutoDestroy() {
         synchronized (this) {
             return autoDestroy;
@@ -179,8 +193,8 @@ public abstract class SongPlayer {
 
     public void destroy() {
         synchronized (this) {
-            SongDestroyingEvent event = new SongDestroyingEvent(this);
-            Bukkit.getPluginManager().callEvent(event);
+            SongDestroyingEvent event = new SongDestroyingEvent(this, Cause.builder().append(this).build(EventContext.empty()));
+            Sponge.getEventManager().post(event);
             //Bukkit.getScheduler().cancelTask(threadId);
             if (event.isCancelled()) {
                 return;
@@ -198,8 +212,8 @@ public abstract class SongPlayer {
     public void setPlaying(boolean playing) {
         this.playing = playing;
         if (!playing) {
-            SongStoppedEvent event = new SongStoppedEvent(this);
-            Bukkit.getPluginManager().callEvent(event);
+            SongStoppedEvent event = new SongStoppedEvent(this, Cause.builder().append(this).build(EventContext.empty()));
+            Sponge.getEventManager().post(event);
         }
     }
 
@@ -213,17 +227,17 @@ public abstract class SongPlayer {
 
     public void removePlayer(Player p) {
         synchronized (this) {
-            playerList.remove(p.getName());
-            if (NoteBlockPlayerMain.plugin.playingSongs.get(p.getName()) == null) {
+            playerList.remove(p.getUniqueId());
+            if (NoteBlockPlayerMain.plugin.playingSongs.get(p.getUniqueId()) == null) {
                 return;
             }
             ArrayList<SongPlayer> songs = new ArrayList<SongPlayer>(
                     NoteBlockPlayerMain.plugin.playingSongs.get(p.getName()));
             songs.remove(this);
-            NoteBlockPlayerMain.plugin.playingSongs.put(p.getName(), songs);
+            NoteBlockPlayerMain.plugin.playingSongs.put(p.getUniqueId(), songs);
             if (playerList.isEmpty() && autoDestroy) {
-                SongEndEvent event = new SongEndEvent(this);
-                Bukkit.getPluginManager().callEvent(event);
+                SongEndEvent event = new SongEndEvent(this, Cause.builder().append(this).build(EventContext.empty()));
+                Sponge.getEventManager().post(event);
                 destroy();
             }
         }

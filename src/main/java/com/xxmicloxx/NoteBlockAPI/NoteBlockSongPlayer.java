@@ -1,52 +1,88 @@
 package com.xxmicloxx.NoteBlockAPI;
 
-import org.bukkit.Material;
-import org.bukkit.block.Block;
-import org.bukkit.entity.Player;
+import org.spongepowered.api.Sponge;
+import org.spongepowered.api.block.BlockTypes;
+import org.spongepowered.api.effect.sound.SoundCategory;
+import org.spongepowered.api.entity.living.player.Player;
+import org.spongepowered.api.event.cause.Cause;
+import org.spongepowered.api.event.cause.EventContext;
+import org.spongepowered.api.world.Location;
+import org.spongepowered.api.world.World;
 
-/**
- * Created with IntelliJ IDEA.
- * User: ml
- * Date: 07.12.13
- * Time: 12:56
- */
 public class NoteBlockSongPlayer extends SongPlayer {
-    private Block noteBlock;
+    private Location<World> noteBlock;
+    private int distance = 16;
 
     public NoteBlockSongPlayer(Song song) {
         super(song);
     }
 
-    public Block getNoteBlock() {
+    public NoteBlockSongPlayer(Song song, SoundCategory soundCategory) {
+        super(song, soundCategory);
+    }
+
+    public Location<World> getNoteBlock() {
         return noteBlock;
     }
 
-    public void setNoteBlock(Block noteBlock) {
-        this.noteBlock = noteBlock;
-    }
-
     @Override
-    public void playTick(Player p, int tick) {
-        if (noteBlock.getType() != Material.NOTE_BLOCK) {
+    public void playTick(Player player, int tick) {
+        if (!noteBlock.getBlockType().equals(BlockTypes.NOTEBLOCK)) {
             return;
         }
-        if (!p.getWorld().getName().equals(noteBlock.getWorld().getName())) {
+        if (!player.getWorld().equals(noteBlock.getExtent())) {
             // not in same world
             return;
         }
-        byte playerVolume = NoteBlockPlayerMain.getPlayerVolume(p);
+        byte playerVolume = NoteBlockPlayerMain.getPlayerVolume(player);
 
         for (Layer l : song.getLayerHashMap().values()) {
             Note note = l.getNote(tick);
             if (note == null) {
                 continue;
             }
-            p.playNote(noteBlock.getLocation(), Instrument.getBukkitInstrument(note.getInstrument()),
-                    new org.bukkit.Note(note.getKey() - 33));
-            p.playSound(noteBlock.getLocation(),
-                    Instrument.getInstrument(note.getInstrument()),
-                    (l.getVolume() * (int) volume * (int) playerVolume) / 1000000f,
-                    NotePitch.getPitch(note.getKey() - 33));
+
+            player.playSound(Instrument.getInstrument(note.getInstrument()),
+                    soundCategory,
+                    noteBlock.getPosition(),
+                    ((l.getVolume() * (int) volume * (int) playerVolume) / 1000000f) * ((1f / 16f) * distance),
+                    NotePitch.getPitch(note.getKey() - 33)
+            );
+
+            if (isPlayerInRange(player)) {
+                if (!this.playerList.contains(player.getUniqueId())) {
+                    playerList.add(player.getUniqueId());
+                    PlayerRangeStateChangeEvent event = new PlayerRangeStateChangeEvent(this, true, Cause.builder().append(player).build(EventContext.empty()));
+                    Sponge.getEventManager().post(event);
+                }
+            } else {
+                if (this.playerList.contains(player.getUniqueId())) {
+                    playerList.remove(player.getUniqueId());
+                    PlayerRangeStateChangeEvent event = new PlayerRangeStateChangeEvent(this, false, Cause.builder().append(player).build(EventContext.empty()));
+                    Sponge.getEventManager().post(event);
+                }
+            }
+        }
+    }
+
+    /**
+     * Sets distance in blocks where would be player able to hear sound.
+     *
+     * @param distance (Default 16 blocks)
+     */
+    public void setDistance(int distance) {
+        this.distance = distance;
+    }
+
+    public int getDistance() {
+        return distance;
+    }
+
+    public boolean isPlayerInRange(Player p) {
+        if (p.getLocation().getPosition().distance(noteBlock.getPosition()) > distance) {
+            return false;
+        } else {
+            return true;
         }
     }
 }

@@ -1,29 +1,22 @@
 package com.xxmicloxx.NoteBlockAPI;
 
-import org.bukkit.event.Cancellable;
-import org.bukkit.event.Event;
-import org.bukkit.event.HandlerList;
+import org.spongepowered.api.event.Cancellable;
+import org.spongepowered.api.event.cause.Cause;
+import org.spongepowered.api.event.impl.AbstractEvent;
 
-public class SongDestroyingEvent extends Event implements Cancellable {
+public class SongDestroyingEvent extends AbstractEvent implements Cancellable {
 
-    private static final HandlerList handlers = new HandlerList();
-    private SongPlayer song;
+    private final SongPlayer song;
+    private final Cause cause;
     private boolean cancelled = false;
 
-    public SongDestroyingEvent(SongPlayer song) {
+    public SongDestroyingEvent(SongPlayer song, Cause cause) {
         this.song = song;
-    }
-
-    public static HandlerList getHandlerList() {
-        return handlers;
+        this.cause = cause;
     }
 
     public SongPlayer getSongPlayer() {
         return song;
-    }
-
-    public HandlerList getHandlers() {
-        return handlers;
     }
 
     @Override
@@ -34,5 +27,10 @@ public class SongDestroyingEvent extends Event implements Cancellable {
     @Override
     public void setCancelled(boolean arg0) {
         cancelled = arg0;
+    }
+
+    @Override
+    public Cause getCause() {
+        return cause;
     }
 }

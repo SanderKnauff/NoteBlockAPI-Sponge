@@ -1,14 +1,24 @@
 package com.xxmicloxx.NoteBlockAPI;
 
-import org.bukkit.Location;
-import org.bukkit.entity.Player;
+import org.spongepowered.api.Sponge;
+import org.spongepowered.api.effect.sound.SoundCategory;
+import org.spongepowered.api.entity.living.player.Player;
+import org.spongepowered.api.event.cause.Cause;
+import org.spongepowered.api.event.cause.EventContext;
+import org.spongepowered.api.world.Location;
+import org.spongepowered.api.world.World;
 
 public class PositionSongPlayer extends SongPlayer {
 
-    private Location targetLocation;
+    private Location<World> targetLocation;
+    private int distance = 16;
 
     public PositionSongPlayer(Song song) {
         super(song);
+    }
+
+    public PositionSongPlayer(Song song, SoundCategory soundCategory) {
+        super(song, soundCategory);
     }
 
     public Location getTargetLocation() {
@@ -20,22 +30,60 @@ public class PositionSongPlayer extends SongPlayer {
     }
 
     @Override
-    public void playTick(Player p, int tick) {
-        if (!p.getWorld().getName().equals(targetLocation.getWorld().getName())) {
+    public void playTick(Player player, int tick) {
+        if (!player.getWorld().equals(targetLocation.getExtent())) {
             // not in same world
             return;
         }
-        byte playerVolume = NoteBlockPlayerMain.getPlayerVolume(p);
+        byte playerVolume = NoteBlockPlayerMain.getPlayerVolume(player);
 
         for (Layer l : song.getLayerHashMap().values()) {
             Note note = l.getNote(tick);
             if (note == null) {
                 continue;
             }
-            p.playSound(targetLocation,
-                    Instrument.getInstrument(note.getInstrument()),
-                    (l.getVolume() * (int) volume * (int) playerVolume) / 1000000f,
-                    NotePitch.getPitch(note.getKey() - 33));
+
+            player.playSound(Instrument.getInstrument(note.getInstrument()),
+                    soundCategory,
+                    targetLocation.getPosition(),
+                    ((l.getVolume() * (int) volume * (int) playerVolume) / 1000000f) * ((1f / 16f) * distance),
+                    NotePitch.getPitch(note.getKey() - 33)
+            );
+
+            if (isPlayerInRange(player)) {
+                if (!this.playerList.contains(player.getUniqueId())) {
+                    playerList.add(player.getUniqueId());
+                    PlayerRangeStateChangeEvent event = new PlayerRangeStateChangeEvent(this, true, Cause.builder().append(player).build(EventContext.empty()));
+                    Sponge.getEventManager().post(event);
+                }
+            } else {
+                if (this.playerList.contains(player.getUniqueId())) {
+                    playerList.remove(player.getUniqueId());
+                    PlayerRangeStateChangeEvent event = new PlayerRangeStateChangeEvent(this, false, Cause.builder().append(player).build(EventContext.empty()));
+                    Sponge.getEventManager().post(event);
+                }
+            }
+        }
+    }
+
+    /**
+     * Sets distance in blocks where would be player able to hear sound.
+     *
+     * @param distance (Default 16 blocks)
+     */
+    public void setDistance(int distance) {
+        this.distance = distance;
+    }
+
+    public int getDistance() {
+        return distance;
+    }
+
+    public boolean isPlayerInRange(Player p) {
+        if (p.getLocation().getPosition().distance(targetLocation.getPosition()) > distance) {
+            return false;
+        } else {
+            return true;
         }
     }
 }
