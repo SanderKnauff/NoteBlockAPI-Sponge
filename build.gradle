@@ -5,6 +5,7 @@ plugins {
 group 'com.xxmicloxx'
 version '1.9.0-Sponge'
 description 'a developer interface to play nbs-files ingame'
+archivesBaseName = rootProject.name
 
 apply plugin: 'java'
 
@@ -30,4 +31,18 @@ blossom {
 
 compileJava {
     sourceCompatibility = targetCompatibility = '1.8'
+}
+
+task javadocJar(type: Jar) {
+    classifier = 'javadoc'
+    from javadoc
+}
+
+task sourcesJar(type: Jar) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+artifacts {
+    archives javadocJar, sourcesJar
 }
