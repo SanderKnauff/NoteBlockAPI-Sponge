@@ -146,10 +146,10 @@ public abstract class SongPlayer {
 
     public void addPlayer(Player p) {
         synchronized (this) {
-            if (!playerList.contains(p.getName())) {
+            if (!playerList.contains(p.getUniqueId())) {
                 playerList.add(p.getUniqueId());
                 ArrayList<SongPlayer> songs = NoteBlockPlayerMain.plugin.playingSongs
-                        .get(p.getName());
+                        .get(p.getUniqueId());
                 if (songs == null) {
                     songs = new ArrayList<SongPlayer>();
                 }
@@ -232,7 +232,7 @@ public abstract class SongPlayer {
                 return;
             }
             ArrayList<SongPlayer> songs = new ArrayList<SongPlayer>(
-                    NoteBlockPlayerMain.plugin.playingSongs.get(p.getName()));
+                    NoteBlockPlayerMain.plugin.playingSongs.get(p.getUniqueId()));
             songs.remove(this);
             NoteBlockPlayerMain.plugin.playingSongs.put(p.getUniqueId(), songs);
             if (playerList.isEmpty() && autoDestroy) {
